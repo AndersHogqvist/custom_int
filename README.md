@@ -2,7 +2,7 @@
 An integer (signed and unsigned) class based on std::bitset
 
 # Background
-During a project at my work I needed a convenient way to store values taking up the smallest amount of bits necessary in an array of unsigned short ints. For instance, a value that could be between 0 and 7 was only supposed to be 3 bits long. I then started to search around for a solution but found none that suited my needs so I decided to develop one my self.
+During a project at my work I needed a convenient way to store values taking up the smallest amount of bits necessary, not in memory but later when they're serialized into an array of unsigned short ints. For instance, a value that could be between 0 and 7 was only supposed to be 3 bits long. I ended up developing my own solution based on std::bitset with some additional code in order to make it work with signed values. Another goal was to make it work as close to a regular integer type as possible so I also included arithmetics.
 
 # Usage
 The idea was to make the usage as close to a regular integral type as possible.
