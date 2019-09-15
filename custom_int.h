@@ -2,7 +2,7 @@
  * int_types.h
  *
  *  Created on: Sep 1, 2019
- *      Author: Anders Högqvist
+ *      Author: Anders HÃ¶gqvist
  */
 
 #ifndef CUSTOM_INT_H_
@@ -406,7 +406,7 @@ public:
     if (this->data_[Size - 1]) {
       std::bitset<Size> tmp = this->data_;
       tmp.flip();
-      return static_cast<long long>(tmp.to_ulong() * -1 - 1);
+      return tmp.to_ullong() * -1 - 1;
     }
     return this->data_.to_ullong();
   }
