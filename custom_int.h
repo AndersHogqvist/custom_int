@@ -9,11 +9,12 @@
 #define CUSTOM_INT_H_
 
 #include <bitset>
+#include <stdexcept>
 #include <type_traits>
 
 #include <iostream>
 
-const static size_t kSizeThreshold = 64;
+static constexpr size_t kSizeThreshold = 64;
 
 template<size_t Size>
 class TypeBase {
@@ -30,7 +31,7 @@ public:
     return data_.to_ullong();
   }
 
-  std::bitset<Size> data() const {
+  const std::bitset<Size> &data() const {
     return data_;
   }
 
@@ -46,7 +47,7 @@ public:
   }
 
   bool operator==(const TypeBase<Size> &other) const {
-    return data_ == other.data();
+    return data_ == other.data_;
   }
 
   template<typename T,
@@ -69,7 +70,7 @@ public:
     if (data_ == other.data_) {
       return false;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() < other.to_ullong();
     }
     return less_than_(other.data_);
@@ -78,7 +79,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator<(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() < value;
     }
     return less_than_(std::bitset<Size>(value));
@@ -88,7 +89,7 @@ public:
     if (data_ == other.data_) {
       return true;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() <= other.to_ullong();
     }
     return less_than_or_eq_(other.data_);
@@ -97,7 +98,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator<=(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() <= value;
     }
     return less_than_or_eq_(std::bitset<Size>(value));
@@ -107,7 +108,7 @@ public:
     if (data_ == other.data_) {
       return false;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() > other.to_ullong();
     }
     return greater_than_(other.data_);
@@ -116,7 +117,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator>(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() > value;
     }
     return greater_than_(std::bitset<Size>(value));
@@ -126,7 +127,7 @@ public:
     if (data_ == other.data_) {
       return true;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() >= other.to_ullong();
     }
     return greater_than_or_eq_(other.data_);
@@ -135,7 +136,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator>=(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_ullong() >= value;
     }
     return greater_than_or_eq_(std::bitset<Size>(value));
@@ -161,7 +162,7 @@ public:
     else {
       bool carry = false;
       for (size_t ix = 0; ix < Size; ++ix) {
-        data_[ix] = add_(data_[ix], other.data_[ix], carry);
+        data_[ix] = add_(data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -177,7 +178,7 @@ public:
       bool carry = false;
       std::bitset<Size> other(value);
       for (size_t ix = 0; ix < Size; ++ix) {
-        data_[ix] = add_(data_[ix], other.data_[ix], carry);
+        data_[ix] = add_(data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -203,7 +204,7 @@ public:
     else {
       bool carry = false;
       for (size_t ix = 0; ix < Size; ++ix) {
-        data_[ix] = add_(data_[ix], other.data_[ix], carry);
+        data_[ix] = add_(data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -368,31 +369,73 @@ public:
   }
 
   TypeBase<Size> &operator/(const TypeBase<Size> &other) {
-    data_ = data_.to_ullong() / other.to_ullong();
+    if (other.data_.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      data_ = data_.to_ullong() / other.to_ullong();
+    }
+    else {
+      data_ = divide_unsigned_(data_, other.data_);
+    }
     return *this;
   }
 
   TypeBase<Size> &operator/(const std::bitset<Size> &other) {
-    data_ = data_.to_ullong() / other.to_ullong();
+    if (other.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      data_ = data_.to_ullong() / other.to_ullong();
+    }
+    else {
+      data_ = divide_unsigned_(data_, other);
+    }
     return *this;
   }
 
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   TypeBase<Size> &operator/(const T value) {
-    data_ = data_.to_ullong() / value;
+    std::bitset<Size> other(value);
+    if (other.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      data_ = data_.to_ullong() / value;
+    }
+    else {
+      data_ = divide_unsigned_(data_, other);
+    }
     return *this;
   }
 
   TypeBase<Size> &operator/=(const TypeBase<Size> &other) {
-    data_ = to_ullong() / other.to_ullong();
+    if (other.data_.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      data_ = to_ullong() / other.to_ullong();
+    }
+    else {
+      data_ = divide_unsigned_(data_, other.data_);
+    }
     return *this;
   }
 
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   TypeBase<Size> &operator/=(const T value) {
-    data_ = to_ullong() / value;
+    std::bitset<Size> other(value);
+    if (other.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      data_ = to_ullong() / value;
+    }
+    else {
+      data_ = divide_unsigned_(data_, other);
+    }
     return *this;
   }
 
@@ -400,7 +443,7 @@ public:
   friend std::ostream &operator <<(std::ostream &out, const TypeBase<S> &u);
 protected:
   TypeBase() = default;
-  virtual ~TypeBase() = default;
+  ~TypeBase() = default;
 
   std::bitset<Size> data_;
 
@@ -412,7 +455,7 @@ protected:
 
   void subtract_(const std::bitset<Size> &other) {
     bool borrow = false;
-    for (int i = 0; i < Size; i++) {
+    for (size_t i = 0; i < Size; ++i) {
       if (borrow) {
         if (data_[i]) {
           data_[i] = other[i];
@@ -440,14 +483,14 @@ protected:
     std::bitset<Size> tmp = data_;
     data_.reset();
     if (tmp.count() < other.count()) {
-      for (int i = 0; i < Size; i++) {
+      for (size_t i = 0; i < Size; ++i) {
         if (tmp[i]) {
           operator+=(other << i);
         }
       }
     }
     else {
-      for (int i = 0; i < Size; i++) {
+      for (size_t i = 0; i < Size; ++i) {
         if (other[i]) {
           operator+=(tmp << i);
         }
@@ -456,7 +499,7 @@ protected:
   }
 
   bool less_than_or_eq_(const std::bitset<Size> &other) const {
-    for (int i = Size - 1; i >= 0; i--) {
+    for (size_t i = Size; i-- > 0;) {
       if (data_[i] && !other[i]) {
         return false;
       }
@@ -468,7 +511,7 @@ protected:
   }
 
   bool less_than_(const std::bitset<Size> &other) const {
-    for (int i = Size - 1; i >= 0; i--) {
+    for (size_t i = Size; i-- > 0;) {
       if (data_[i] && !other[i]) {
         return false;
       }
@@ -480,7 +523,7 @@ protected:
   }
 
   bool greater_than_or_eq_(const std::bitset<Size> &other) const {
-    for (int i = Size - 1; i >= 0; i--) {
+    for (size_t i = Size; i-- > 0;) {
       if (data_[i] && !other[i]) {
         return true;
       }
@@ -492,7 +535,7 @@ protected:
   }
 
   bool greater_than_(const std::bitset<Size> &other) const {
-    for (int i = Size - 1; i >= 0; i--) {
+    for (size_t i = Size; i-- > 0;) {
       if (data_[i] && !other[i]) {
         return true;
       }
@@ -501,6 +544,72 @@ protected:
       }
     }
     return false;
+  }
+
+  static bool less_than_bits_(const std::bitset<Size> &lhs,
+                              const std::bitset<Size> &rhs) {
+    for (size_t i = Size; i-- > 0;) {
+      if (lhs[i] != rhs[i]) {
+        return !lhs[i] && rhs[i];
+      }
+    }
+    return false;
+  }
+
+  static void subtract_bits_(std::bitset<Size> &lhs,
+                             const std::bitset<Size> &rhs) {
+    bool borrow = false;
+    for (size_t i = 0; i < Size; ++i) {
+      const bool lhs_bit = lhs[i];
+      const bool rhs_bit = rhs[i];
+      lhs[i] = lhs_bit ^ rhs_bit ^ borrow;
+      borrow = (!lhs_bit && (rhs_bit || borrow)) || (rhs_bit && borrow);
+    }
+  }
+
+  static size_t highest_set_bit_(const std::bitset<Size> &value) {
+    for (size_t i = Size; i-- > 0;) {
+      if (value[i]) {
+        return i;
+      }
+    }
+    return Size;
+  }
+
+  static std::bitset<Size> divide_unsigned_(const std::bitset<Size> &dividend,
+                                            const std::bitset<Size> &divisor) {
+    if (divisor.none()) {
+      throw std::domain_error("Division by zero");
+    }
+
+    if (dividend.none() || less_than_bits_(dividend, divisor)) {
+      return std::bitset<Size>();
+    }
+
+    const size_t dividend_msb = highest_set_bit_(dividend);
+    const size_t divisor_msb = highest_set_bit_(divisor);
+    const size_t shift = dividend_msb - divisor_msb;
+
+    std::bitset<Size> quotient;
+    std::bitset<Size> remainder = dividend;
+    std::bitset<Size> shifted_divisor = divisor << shift;
+
+    for (size_t current_shift = shift + 1; current_shift-- > 0;) {
+      if (!less_than_bits_(remainder, shifted_divisor)) {
+        subtract_bits_(remainder, shifted_divisor);
+        quotient.set(current_shift);
+        if (remainder.none()) {
+          break;
+        }
+      }
+
+      if (current_shift == 0) {
+        break;
+      }
+      shifted_divisor >>= 1;
+    }
+
+    return quotient;
   }
 };
 
@@ -518,17 +627,11 @@ public:
   ~UInt() = default;
 
   UInt<Size> &operator=(const TypeBase<Size> &other) {
-    if (this->data_ == other.data()) {
-      return *this;
-    }
     this->data_ = other.data();
     return *this;
   }
 
   UInt<Size> &operator=(const std::bitset<Size> &other) {
-    if (this->data_ == other) {
-      return *this;
-    }
     this->data_ = other;
     return *this;
   }
@@ -565,17 +668,11 @@ public:
   ~Int() = default;
 
   Int<Size> &operator=(const TypeBase<Size> &other) {
-    if (this->data_ == other.data()) {
-      return *this;
-    }
     this->data_ = other.data();
     return *this;
   }
 
   Int<Size> &operator=(const std::bitset<Size> &other) {
-    if (this->data_ == other) {
-      return *this;
-    }
     this->data_ = other;
     return *this;
   }
@@ -600,7 +697,7 @@ public:
     if (this->data_ == other.data_) {
       return false;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() < other.to_int();
     }
     return TypeBase<Size>::less_than_(other.data_);
@@ -609,7 +706,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator<(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() < value;
     }
     return TypeBase<Size>::less_than_(std::bitset<Size>(value));
@@ -619,7 +716,7 @@ public:
     if (this->data_ == other.data_) {
       return true;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() <= other.to_int();
     }
     return TypeBase<Size>::less_than_or_eq_(other.data_);
@@ -628,7 +725,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator<=(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() <= value;
     }
     return TypeBase<Size>::less_than_or_eq_(std::bitset<Size>(value));
@@ -638,7 +735,7 @@ public:
     if (this->data_ == other.data_) {
       return false;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() > other.to_int();
     }
     return TypeBase<Size>::greater_than_(other.data_);
@@ -647,7 +744,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator>(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() > value;
     }
     return TypeBase<Size>::greater_than_(std::bitset<Size>(value));
@@ -657,7 +754,7 @@ public:
     if (this->data_ == other.data_) {
       return true;
     }
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() >= other.to_int();
     }
     return TypeBase<Size>::greater_than_or_eq_(other.data_);
@@ -666,7 +763,7 @@ public:
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   bool operator>=(const T value) const {
-    if (Size <= kSizeThreshold) {
+    if constexpr (Size <= kSizeThreshold) {
       return to_int() >= value;
     }
     return TypeBase<Size>::greater_than_or_eq_(std::bitset<Size>(value));
@@ -692,7 +789,7 @@ public:
     else {
       bool carry = false;
       for (size_t ix = 0; ix < Size; ++ix) {
-        this->data_[ix] = add_(this->data_[ix], other.data_[ix], carry);
+        this->data_[ix] = add_(this->data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -708,7 +805,7 @@ public:
       bool carry = false;
       std::bitset<Size> other(value);
       for (size_t ix = 0; ix < Size; ++ix) {
-        this->data_[ix] = add_(this->data_[ix], other.data_[ix], carry);
+        this->data_[ix] = add_(this->data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -734,7 +831,7 @@ public:
     else {
       bool carry = false;
       for (size_t ix = 0; ix < Size; ++ix) {
-        this->data_[ix] = add_(this->data_[ix], other.data_[ix], carry);
+        this->data_[ix] = add_(this->data_[ix], other[ix], carry);
       }
     }
     return *this;
@@ -899,32 +996,112 @@ public:
   }
 
   Int<Size> &operator/(const Int<Size> &other) {
-    this->data_ = to_int() / other.to_int();
+    if (other.data_.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      this->data_ = to_int() / other.to_int();
+    }
+    else {
+      divide_signed_(other.data_);
+    }
     return *this;
   }
 
   Int<Size> &operator/(const std::bitset<Size> &other) {
-    this->data_ = to_int() / other.to_ullong();
+    if (other.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      this->data_ = to_int() / other.to_ullong();
+    }
+    else {
+      divide_signed_(other);
+    }
     return *this;
   }
 
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   Int<Size> &operator/(const T value) {
-    this->data_ = to_int() / value;
+    std::bitset<Size> divisor(value);
+    if (divisor.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      this->data_ = to_int() / value;
+    }
+    else {
+      divide_signed_(divisor);
+    }
     return *this;
   }
 
   Int<Size> &operator/=(const Int<Size> &other) {
-    this->data_ = to_int() / other.to_int();
+    if (other.data_.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      this->data_ = to_int() / other.to_int();
+    }
+    else {
+      divide_signed_(other.data_);
+    }
     return *this;
   }
 
   template<typename T,
       typename std::enable_if<std::is_integral<T>::value, T>::type* = nullptr>
   Int<Size> &operator/=(const T value) {
-    this->data_ = to_int() / value;
+    std::bitset<Size> divisor(value);
+    if (divisor.none()) {
+      throw std::domain_error("Division by zero");
+    }
+    if constexpr (Size <= kSizeThreshold) {
+      this->data_ = to_int() / value;
+    }
+    else {
+      divide_signed_(divisor);
+    }
     return *this;
+  }
+
+private:
+  static void increment_bits_(std::bitset<Size> &value) {
+    bool carry = true;
+    for (size_t i = 0; i < Size && carry; ++i) {
+      const bool bit = value[i];
+      value[i] = !bit;
+      carry = bit;
+    }
+  }
+
+  static std::bitset<Size> twos_complement_(std::bitset<Size> value) {
+    value.flip();
+    increment_bits_(value);
+    return value;
+  }
+
+  static std::bitset<Size> magnitude_bits_(const std::bitset<Size> &value) {
+    if (!value[Size - 1]) {
+      return value;
+    }
+    return twos_complement_(value);
+  }
+
+  void divide_signed_(const std::bitset<Size> &divisor) {
+    const bool lhs_negative = this->data_[Size - 1];
+    const bool rhs_negative = divisor[Size - 1];
+
+    const std::bitset<Size> lhs_mag = magnitude_bits_(this->data_);
+    const std::bitset<Size> rhs_mag = magnitude_bits_(divisor);
+    std::bitset<Size> quotient = TypeBase<Size>::divide_unsigned_(lhs_mag, rhs_mag);
+
+    if (lhs_negative ^ rhs_negative) {
+      quotient = twos_complement_(quotient);
+    }
+
+    this->data_ = quotient;
   }
 };
 
