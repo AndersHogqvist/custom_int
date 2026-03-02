@@ -12,7 +12,7 @@ The idea was to make the usage as close to a regular integral type as possible.
 Int<13> value1;
 UInt<4> value2 = 2;
 ```
-For implementations where a certain type is used alot one can make life easier with typedef:
+For implementations where a certain type is used a lot one can make life easier with typedef:
 ```
 typedef Int<5> Int5;
 typedef Int<7> Int7;
@@ -26,7 +26,7 @@ Uint9 value4;
 ```
 
 #### Arithmetics
-I've implemented support for just about every kind arithmetic operations including additon, subtraction, division and multiplication. For instantiation with > 64 bits these arithmetics are done bit-by-bit with a quite large performance hit as a result.
+I've implemented support for just about every kind arithmetic operations including addition, subtraction, division and multiplication. For instantiation with > 64 bits these arithmetics are done bit-by-bit with a quite large performance hit as a result.
 
 ```
 Int<5> value1, value2;
@@ -48,5 +48,5 @@ etc...
 I welcome any idea on how to improve this and please let me know if you find anything that isn't working!
 
 
-### Todo
-I've not implemented a bit-by-bit implementation of division because I couldn't figure out how to do it.
+### Division for large widths
+Division is now implemented for instantiations wider than 64 bits using a bitwise long-division algorithm (shift/subtract), and division-by-zero throws a `std::domain_error`.
